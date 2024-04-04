@@ -1,4 +1,4 @@
-import express from "express";
+import express, { application } from "express";
 import bodyParser from "body-parser";
 import pg from "pg";
 import bcrypt from "bcrypt";
@@ -45,7 +45,14 @@ app.get("/login", (req, res) => {
 app.get("/register", (req, res) => {
   res.render("register.ejs");
 });
-
+//secret submit route
+app.get("/submit",( req, res)=>{
+  if (req.isAuthenticated()) {
+    res.render("submit.ejs");
+  } else {
+    res.redirect("/login");
+  }
+})
 app.get("/logout", (req, res) => {
   req.logout(function (err) {
     if (err) {
@@ -55,9 +62,20 @@ app.get("/logout", (req, res) => {
   });
 });
 
-app.get("/secrets", (req, res) => {
+app.get("/secrets", async(req, res) => {
   if (req.isAuthenticated()) {
-    res.render("secrets.ejs");
+    try{
+      const  result = await db.query("Select secret from users where email = $1", [req.user.email]);
+      console.log(result);
+      const secret = result.rows[0].secret;
+      if(secret){
+        res.render("secrets.ejs",{secret:secret});
+      }else{
+        console.log("No secretes found");
+      }
+    }catch(err){
+      console.log(err);
+    }
   } else {
     res.redirect("/login");
   }
@@ -85,6 +103,20 @@ app.post(
     failureRedirect: "/login",
   })
 );
+//for submitting secret
+app.post("/submit", async (req, res) => {
+  const secret = req.body.secret; // Safely handle empty or whitespace-only secrets
+  // ab secret kis user k tuple me add kre 
+  console.log(req.user)
+
+  try {
+      await db.query("Update users set secret = $1 where email = $2",[secret, req.user.email])
+      res.redirect("/secrets"); // Assuming 'locals' is intended for data
+    } catch (err) {
+    console.error(err); // Log the error for debugging
+    res.status(500).send("An error occurred. Please try again later."); // Generic error message for user
+  }
+});
 
 app.post("/register", async (req, res) => {
   const email = req.body.username;
